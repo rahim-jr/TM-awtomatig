@@ -1,65 +1,193 @@
-import Image from "next/image";
+"use client";
+
+import { FormEvent, useState } from "react";
+
+type TaskStatus = "To Do" | "In Progress" | "Done";
+
+type Task = {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+};
+
+const statusOptions: TaskStatus[] = ["To Do", "In Progress", "Done"];
+
+function createTaskId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export default function Home() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState<TaskStatus>("To Do");
+
+  function handleAddTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+
+    if (!trimmedTitle) {
+      return;
+    }
+
+    setTasks((currentTasks) => [
+      {
+        id: createTaskId(),
+        title: trimmedTitle,
+        description: trimmedDescription,
+        status,
+      },
+      ...currentTasks,
+    ]);
+    setTitle("");
+    setDescription("");
+    setStatus("To Do");
+  }
+
+  function updateTaskStatus(taskId: string, nextStatus: TaskStatus) {
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === taskId ? { ...task, status: nextStatus } : task,
+      ),
+    );
+  }
+
+  function deleteTask(taskId: string) {
+    setTasks((currentTasks) =>
+      currentTasks.filter((task) => task.id !== taskId),
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="min-h-screen bg-white px-4 py-8 text-slate-950 sm:px-6">
+      <div className="mx-auto max-w-3xl">
+        <header>
+          <h1 className="text-2xl font-semibold">Task Manager</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Add tasks and update their status.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        </header>
+
+        <form
+          className="mt-8 grid gap-4 border-b border-slate-200 pb-8"
+          onSubmit={handleAddTask}
+        >
+          <label className="grid gap-1 text-sm font-medium text-slate-700">
+            Title
+            <input
+              className="h-10 rounded-md border border-slate-300 px-3 text-slate-950 outline-none focus:border-slate-950"
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Task title"
+              type="text"
+              value={title}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          </label>
+
+          <label className="grid gap-1 text-sm font-medium text-slate-700">
+            Description
+            <textarea
+              className="min-h-24 rounded-md border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-slate-950"
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="Task description"
+              value={description}
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+            <label className="grid gap-1 text-sm font-medium text-slate-700">
+              Status
+              <select
+                className="h-10 rounded-md border border-slate-300 bg-white px-3 text-slate-950 outline-none focus:border-slate-950"
+                onChange={(event) =>
+                  setStatus(event.target.value as TaskStatus)
+                }
+                value={status}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              className="h-10 rounded-md bg-slate-950 px-4 text-sm font-medium text-white disabled:bg-slate-300"
+              disabled={!title.trim()}
+              type="submit"
+            >
+              Add Task
+            </button>
+          </div>
+        </form>
+
+        <section className="mt-8">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-lg font-semibold">Tasks</h2>
+            <p className="text-sm text-slate-500">
+              {tasks.length === 1 ? "1 task" : `${tasks.length} tasks`}
+            </p>
+          </div>
+
+          {tasks.length === 0 ? (
+            <p className="mt-6 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              No tasks yet.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
+              {tasks.map((task) => (
+                <li key={task.id} className="py-4">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                    <div>
+                      <h3 className="break-words font-medium">{task.title}</h3>
+                      {task.description ? (
+                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-600">
+                          {task.description}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="flex gap-2 sm:justify-end">
+                      <select
+                        aria-label={`Update status for ${task.title}`}
+                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-slate-950"
+                        onChange={(event) =>
+                          updateTaskStatus(
+                            task.id,
+                            event.target.value as TaskStatus,
+                          )
+                        }
+                        value={task.status}
+                      >
+                        {statusOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        className="h-9 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700"
+                        onClick={() => deleteTask(task.id)}
+                        type="button"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </main>
   );
 }
