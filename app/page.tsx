@@ -14,7 +14,9 @@ type Task = {
 };
 
 const statusOptions: TaskStatus[] = ["To Do", "In Progress", "Done"];
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+const apiBaseUrl = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
+).replace(/\/$/, "");
 
 async function requestApi<T>(path: string, options?: RequestInit) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
