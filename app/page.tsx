@@ -1,24 +1,39 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type TaskStatus = "To Do" | "In Progress" | "Done";
 
 type Task = {
-  id: string;
+  _id: string;
   title: string;
   description: string;
   status: TaskStatus;
+  createdAt: string;
+  updatedAt: string;
 };
 
 const statusOptions: TaskStatus[] = ["To Do", "In Progress", "Done"];
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
 
-function createTaskId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+async function requestApi<T>(path: string, options?: RequestInit) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
   }
 
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  return (await response.json()) as T;
 }
 
 export default function Home() {
@@ -26,8 +41,40 @@ export default function Home() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<TaskStatus>("To Do");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  function handleAddTask(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTasks() {
+      try {
+        setErrorMessage("");
+        const loadedTasks = await requestApi<Task[]>("/api/tasks");
+
+        if (isMounted) {
+          setTasks(loadedTasks);
+        }
+      } catch {
+        if (isMounted) {
+          setErrorMessage("Could not load tasks from the backend.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    loadTasks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function handleAddTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedTitle = title.trim();
@@ -37,32 +84,73 @@ export default function Home() {
       return;
     }
 
-    setTasks((currentTasks) => [
-      {
-        id: createTaskId(),
-        title: trimmedTitle,
-        description: trimmedDescription,
-        status,
-      },
-      ...currentTasks,
-    ]);
-    setTitle("");
-    setDescription("");
-    setStatus("To Do");
+    try {
+      setIsSaving(true);
+      setErrorMessage("");
+
+      const createdTask = await requestApi<Task>("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title: trimmedTitle,
+          description: trimmedDescription,
+          status,
+        }),
+      });
+
+      setTasks((currentTasks) => [createdTask, ...currentTasks]);
+      setTitle("");
+      setDescription("");
+      setStatus("To Do");
+    } catch {
+      setErrorMessage("Could not create the task.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function updateTaskStatus(taskId: string, nextStatus: TaskStatus) {
+  async function updateTaskStatus(taskId: string, nextStatus: TaskStatus) {
+    const previousTasks = tasks;
+
     setTasks((currentTasks) =>
       currentTasks.map((task) =>
-        task.id === taskId ? { ...task, status: nextStatus } : task,
+        task._id === taskId ? { ...task, status: nextStatus } : task,
       ),
     );
+
+    try {
+      setErrorMessage("");
+      const updatedTask = await requestApi<Task>(`/api/tasks/${taskId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      setTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          task._id === taskId ? updatedTask : task,
+        ),
+      );
+    } catch {
+      setTasks(previousTasks);
+      setErrorMessage("Could not update the task status.");
+    }
   }
 
-  function deleteTask(taskId: string) {
+  async function deleteTask(taskId: string) {
+    const previousTasks = tasks;
+
     setTasks((currentTasks) =>
-      currentTasks.filter((task) => task.id !== taskId),
+      currentTasks.filter((task) => task._id !== taskId),
     );
+
+    try {
+      setErrorMessage("");
+      await requestApi<null>(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+      });
+    } catch {
+      setTasks(previousTasks);
+      setErrorMessage("Could not delete the task.");
+    }
   }
 
   return (
@@ -74,6 +162,12 @@ export default function Home() {
             Add tasks and update their status.
           </p>
         </header>
+
+        {errorMessage ? (
+          <p className="mt-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </p>
+        ) : null}
 
         <form
           className="mt-8 grid gap-4 border-b border-slate-200 pb-8"
@@ -120,10 +214,10 @@ export default function Home() {
 
             <button
               className="h-10 rounded-md bg-slate-950 px-4 text-sm font-medium text-white disabled:bg-slate-300"
-              disabled={!title.trim()}
+              disabled={!title.trim() || isSaving}
               type="submit"
             >
-              Add Task
+              {isSaving ? "Adding..." : "Add Task"}
             </button>
           </div>
         </form>
@@ -136,14 +230,18 @@ export default function Home() {
             </p>
           </div>
 
-          {tasks.length === 0 ? (
+          {isLoading ? (
+            <p className="mt-6 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+              Loading tasks...
+            </p>
+          ) : tasks.length === 0 ? (
             <p className="mt-6 rounded-md border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
               No tasks yet.
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
               {tasks.map((task) => (
-                <li key={task.id} className="py-4">
+                <li key={task._id} className="py-4">
                   <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                     <div>
                       <h3 className="break-words font-medium">{task.title}</h3>
@@ -160,7 +258,7 @@ export default function Home() {
                         className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-950 outline-none focus:border-slate-950"
                         onChange={(event) =>
                           updateTaskStatus(
-                            task.id,
+                            task._id,
                             event.target.value as TaskStatus,
                           )
                         }
@@ -175,7 +273,7 @@ export default function Home() {
 
                       <button
                         className="h-9 rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700"
-                        onClick={() => deleteTask(task.id)}
+                        onClick={() => deleteTask(task._id)}
                         type="button"
                       >
                         Delete
