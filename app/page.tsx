@@ -14,12 +14,8 @@ type Task = {
 };
 
 const statusOptions: TaskStatus[] = ["To Do", "In Progress", "Done"];
-const apiBaseUrl = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000"
-).replace(/\/$/, "");
-
 async function requestApi<T>(path: string, options?: RequestInit) {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(path, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -121,15 +117,16 @@ export default function Home() {
 
     try {
       setErrorMessage("");
-      const updatedTask = await requestApi<Task>(`/api/tasks/${taskId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
-      });
+      const updatedTask = await requestApi<Task>(
+        `/api/tasks/${taskId}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status: nextStatus }),
+        },
+      );
 
       setTasks((currentTasks) =>
-        currentTasks.map((task) =>
-          task._id === taskId ? updatedTask : task,
-        ),
+        currentTasks.map((task) => (task._id === taskId ? updatedTask : task)),
       );
     } catch {
       setTasks(previousTasks);
